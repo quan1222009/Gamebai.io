@@ -10,12 +10,60 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379'; 
-// Sử dụng biến môi trường cho Render.com
 
-// Kết nối Redis
+// Kết nối Redis (Quan trọng cho Render.com)
 const redis = new Redis(REDIS_URL);
 
-// --- 2. LOGIC QUẢN LÝ GAME TỔNG QUAN ---
+
+// #######################################################
+// --- 2. LOGIC BÀI TÂY CƠ BẢN (CARD DECK LOGIC) ---
+// #######################################################
+
+// Định nghĩa thứ tự chất: Cơ (4) > Rô (3) > Tép (2) > Bích (1)
+const SUIT_ORDER = {
+    'C': 4, // Cơ (Hearts)
+    'R': 3, // Rô (Diamonds)
+    'T': 2, // Tép (Clubs)
+    'B': 1  // Bích (Spades)
+};
+
+// Định nghĩa các loại lá bài và giá trị Rank
+const SUITS = ['C', 'R', 'T', 'B'];
+const RANKS = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'];
+const RANK_VALUES = {
+    '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 
+    '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, '2': 15 
+};
+
+/**
+ * Tạo bộ bài 52 lá không trùng nhau và xáo trộn ngẫu nhiên.
+ */
+function createAndShuffleDeck() {
+    let deck = [];
+    for (const suit of SUITS) {
+        for (const rank of RANKS) {
+            deck.push({
+                rank: rank,
+                suit: suit,
+                value: RANK_VALUES[rank],
+                suit_value: SUIT_ORDER[suit]
+            });
+        }
+    }
+    
+    // Thuật toán Fisher-Yates Shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]]; // Swap
+    }
+    
+    return deck;
+}
+
+// #######################################################
+// --- 3. LOGIC QUẢN LÝ GAME TỔNG QUAN ---
+// #######################################################
+
 // Hàng đợi ghép trận (Queue)
 const matchQueues = {
     'sam': [],
@@ -24,32 +72,45 @@ const matchQueues = {
     'bacay': []
 };
 
-// Cấu trúc để lưu trữ thông tin game đang diễn ra (roomId -> game state)
-// Sẽ lưu trữ chi tiết state game trên Redis, còn đây là Map tạm thời
+// Cấu trúc để lưu trữ thông tin game đang diễn ra
 const activeRooms = new Map();
 let nextRoomId = 1;
 
 /**
- * Hàm đại diện cho logic chia bài, kiểm tra luật, v.v.
- * Đây là nơi cần code logic chi tiết cho 4 loại game.
- * @param {string} gameType - Loại game ('sam', 'tienlen', v.v.)
- * @param {string[]} players - Mảng ID người chơi
- * @returns {object} Trạng thái game khởi tạo
+ * Tạo và khởi tạo trạng thái game mới, chia bài và chọn người đi trước.
  */
 function createNewGame(gameType, players) {
-    // Logic: Khởi tạo bộ bài 52 lá, xáo bài, chia bài.
-    // Logic: Chọn ngẫu nhiên 1 người đi trước.
+    // Sâm/Tiến Lên: 13 lá, Liêng/3 Cây: 3 lá
+    const cardsToDeal = (gameType === 'sam' || gameType === 'tienlen') ? 13 : 3;
+
+    const deck = createAndShuffleDeck(); 
+    const playerCards = {};
     
-    // Ví dụ về cấu trúc trạng thái game (Game State)
+    let k = 0;
+    for (const player of players) {
+        // Chia bài
+        playerCards[player] = deck.slice(k, k + cardsToDeal);
+        k += cardsToDeal;
+        
+        // Sắp xếp bài (giá trị rank tăng dần, sau đó chất tăng dần)
+        playerCards[player].sort((a, b) => {
+            if (a.value !== b.value) return a.value - b.value;
+            return a.suit_value - b.suit_value;
+        });
+    }
+
+    // Chọn ngẫu nhiên 1 người đi trước
+    const starterId = players[Math.floor(Math.random() * players.length)];
+    
     const gameState = {
         id: `R_${nextRoomId++}`,
         type: gameType,
         players: players,
         status: 'playing',
-        cards: { /* Bài của từng người chơi */ },
-        currentPlayer: players[Math.floor(Math.random() * players.length)], // Chọn ngẫu nhiên
-        lastPlayed: null, // Lá bài/bộ bài cuối cùng được đánh
-        passCount: 0 // Đếm lượt bỏ
+        cards: playerCards, // Bài đã chia và sắp xếp
+        currentPlayer: starterId, 
+        lastPlayed: null, 
+        passCount: 0 
     };
 
     // LƯU TRẠNG THÁI GAME VÀO REDIS
@@ -59,7 +120,7 @@ function createNewGame(gameType, players) {
 }
 
 
-// --- 3. LOGIC GHÉP TRẬN (MATCHMAKING) ---
+// --- 4. LOGIC GHÉP TRẬN (MATCHMAKING) ---
 
 /**
  * Kiểm tra và bắt đầu trận đấu nếu đủ người.
@@ -67,15 +128,13 @@ function createNewGame(gameType, players) {
  */
 function checkAndStartMatch(gameType) {
     const queue = matchQueues[gameType];
-    const MIN_PLAYERS = 4; // Ví dụ: Cần 4 người cho Tiến Lên/Sâm
+    
+    // Yêu cầu tối thiểu: 4 người cho Sâm/Tiến Lên, 2 người cho Liêng/3 Cây (có thể là 4 người cho tiêu chuẩn)
+    const MIN_PLAYERS = (gameType === 'sam' || gameType === 'tienlen') ? 4 : 4; 
 
     if (queue.length >= MIN_PLAYERS) {
-        // Lấy 4 người chơi đầu tiên
         const players = queue.splice(0, MIN_PLAYERS);
         
-        // **Thêm logic BOT nếu cần**
-        
-        // Tạo game mới
         const newGame = createNewGame(gameType, players);
         activeRooms.set(newGame.id, newGame);
 
@@ -83,13 +142,13 @@ function checkAndStartMatch(gameType) {
         players.forEach(socketId => {
             const playerSocket = io.sockets.sockets.get(socketId);
             if (playerSocket) {
-                playerSocket.join(newGame.id); // Cho người chơi vào phòng Socket.IO
+                playerSocket.join(newGame.id); 
                 playerSocket.emit('match_found', {
                     roomId: newGame.id,
                     gameType: gameType,
                     players: players
                 });
-                playerSocket.emit('game_state_update', newGame); // Gửi trạng thái game
+                playerSocket.emit('game_state_update', newGame); 
             }
         });
 
@@ -98,15 +157,15 @@ function checkAndStartMatch(gameType) {
 }
 
 
-// --- 4. SOCKET.IO: XỬ LÝ KẾT NỐI VÀ HÀNH ĐỘNG GAME ---
+// --- 5. SOCKET.IO: XỬ LÝ KẾT NỐI VÀ HÀNH ĐỘNG GAME ---
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
     
-    // --- Ghép trận Nhanh (Ví dụ) ---
+    // --- Ghép trận Nhanh ---
     socket.on('join_queue', (gameType) => {
         if (matchQueues[gameType]) {
-            // Đảm bảo người chơi không ở trong queue khác
+            // Loại bỏ người chơi khỏi queue khác nếu họ đã ở đó
             Object.values(matchQueues).forEach(queue => {
                 const index = queue.indexOf(socket.id);
                 if (index > -1) queue.splice(index, 1);
@@ -114,7 +173,6 @@ io.on('connection', (socket) => {
             
             matchQueues[gameType].push(socket.id);
             socket.emit('queue_update', `Đã vào hàng đợi ${gameType}. Đang chờ...`);
-            console.log(`[QUEUE] ${socket.id} joined ${gameType} queue. Total: ${matchQueues[gameType].length}`);
             
             checkAndStartMatch(gameType);
         } else {
@@ -122,7 +180,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // --- Hành động trong Game ---
+    // --- Hành động trong Game: Đánh bài ---
     socket.on('play_cards', async (data) => {
         const { roomId, cards } = data;
         const roomStateStr = await redis.get(`room:${roomId}`);
@@ -130,22 +188,20 @@ io.on('connection', (socket) => {
         if (!roomStateStr) return socket.emit('error', 'Phòng không tồn tại.');
         let roomState = JSON.parse(roomStateStr);
 
-        // 1. Kiểm tra lượt: Phải là lượt của người chơi này (socket.id)
+        // 1. Kiểm tra lượt
         if (roomState.currentPlayer !== socket.id) {
             return socket.emit('error', 'Không phải lượt của bạn.');
         }
 
-        // 2. Logic Kiểm tra Luật Đánh Bài (Đây là phần phức tạp nhất)
-        // Ví dụ: Kiểm tra xem 'cards' có hợp lệ không (ví dụ: đôi, sảnh, v.v.)
-        // Ví dụ: Kiểm tra xem 'cards' có lớn hơn 'roomState.lastPlayed' không (dựa trên rank và suit_value)
+        // 2. LOGIC KIỂM TRA LUẬT ĐÁNH BÀI CẦN ĐƯỢC THÊM VÀO ĐÂY!
+        // (Đây là nơi xử lý quy tắc Sâm/Tiến Lên/Liêng, ĂN ĐÈ, v.v.)
         
-        // Sau khi kiểm tra HỢP LỆ:
-        // Cập nhật roomState: Xóa bài khỏi tay người chơi, cập nhật lastPlayed.
+        // 3. Cập nhật trạng thái game (Tạm thời)
+        // roomState.lastPlayed = cards;
+        // roomState.cards[socket.id] = roomState.cards[socket.id].filter(...) // Xóa bài đã đánh
+        // roomState.currentPlayer = nextPlayerId;
         
-        // Cập nhật người chơi tiếp theo (Next Player)
-        // Nếu người chơi hết bài, xử lý thắng/thua.
-        
-        // LƯU TRẠẠNG THÁI MỚI VÀO REDIS
+        // LƯU TRẠNG THÁI MỚI VÀO REDIS
         await redis.set(`room:${roomId}`, JSON.stringify(roomState));
 
         // Gửi trạng thái game MỚI đến TẤT CẢ mọi người trong phòng
@@ -155,25 +211,19 @@ io.on('connection', (socket) => {
     // --- Hành động Báo Sâm ---
     socket.on('bao_sam', async (data) => {
         const { roomId } = data;
-        // Logic kiểm tra Báo Sâm (chỉ được báo trong 1 lượt đầu, kiểm tra bài có khả năng thắng 100% không)
-        // Nếu hợp lệ: Cập nhật roomState, thông báo tới phòng.
+        // LOGIC BÁO SÂM CẦN ĐƯỢC THÊM VÀO ĐÂY!
+        // ...
     });
 
     // --- Xử lý ngắt kết nối ---
     socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}`);
-        // Xóa người chơi khỏi tất cả Queue (nếu có)
-        Object.values(matchQueues).forEach(queue => {
-            const index = queue.indexOf(socket.id);
-            if (index > -1) queue.splice(index, 1);
-        });
-        
-        // Xử lý game đang diễn ra (ví dụ: đánh dấu người chơi này là 'disconnected')
+        // ... (Logic xóa người chơi khỏi queue và phòng đang chơi)
     });
 });
 
 
-// --- 5. EXPRESS ROUTING: PHỤC VỤ TRANG TĨNH ---
+// --- 6. EXPRESS ROUTING: PHỤC VỤ TRANG TĨNH ---
+// Cần tạo thư mục 'public' chứa index.html
 app.use(express.static('public'));
 
 app.get('/', (req, res) => {
@@ -181,7 +231,7 @@ app.get('/', (req, res) => {
 });
 
 
-// --- 6. KHỞI ĐỘNG SERVER ---
+// --- 7. KHỞI ĐỘNG SERVER ---
 server.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
     console.log(`Redis connected: ${REDIS_URL}`);
