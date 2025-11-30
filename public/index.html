@@ -2,91 +2,401 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Game Bài .io</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #36454F; color: white; }
-        .game-buttons button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; }
-        #game-area { border: 1px solid #777; padding: 20px; min-height: 300px; margin: 20px auto; width: 80%; background-color: #2F4F4F; border-radius: 10px; }
-        .card-hand { display: flex; justify-content: center; margin-top: 20px; }
-        .card { border: 2px solid #000; padding: 10px; margin: 5px; background-color: white; color: black; border-radius: 5px; font-weight: bold; width: 40px; height: 60px; display: flex; justify-content: center; align-items: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a202c; /* Nền tối hơn */
+            color: #e2e8f0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Tránh scroll ngang khi có hiệu ứng 3D */
+        }
+
+        /* --- Căn chỉnh chung --- */
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 20px auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+        }
+        h1 {
+            color: #48bb78; /* Xanh lá cây */
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        }
+        #user-info, #status-message {
+            background-color: #2d3748;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #user-id {
+            font-weight: bold;
+            color: #63b3ed; /* Xanh dương */
+        }
+
+        /* --- Nút bấm chung --- */
+        .game-buttons button, #action-buttons button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #48bb78;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .game-buttons button:hover, #action-buttons button:hover {
+            background-color: #38a169;
+            transform: translateY(-2px);
+        }
+        #action-buttons button.red { background-color: #e53e3e; }
+        #action-buttons button.red:hover { background-color: #c53030; }
+
+        /* --- Khu vực Bàn chơi (Table) --- */
+        #game-area {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* Tỷ lệ 16:9 */
+            max-width: 900px;
+            background-color: #2F4F4F; /* Màu nỉ bàn */
+            border-radius: 50%; /* Bàn tròn */
+            box-shadow: 0 0 0 20px #4a5568, /* Viền ngoài (gỗ) */
+                        0 0 0 22px #1a202c, /* Viền tối */
+                        inset 0 0 20px rgba(0,0,0,0.5); /* Đổ bóng trong */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 40px; /* Padding để các lá bài không chạm viền */
+            box-sizing: border-box;
+        }
+        /* Tạo hiệu ứng ánh sáng từ trên */
+        #game-area::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, rgba(255, 255, 200, 0.1) 0%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.8) 100%);
+            pointer-events: none; /* Cho phép tương tác bên dưới */
+        }
+
+        #played-cards-area {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-height: 80px; /* Chiều cao tối thiểu */
+            width: 80%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            perspective: 1000px; /* Cho hiệu ứng 3D */
+        }
+        #player-hand-area {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            width: 80%;
+            min-height: 80px; /* Chiều cao tối thiểu */
+            perspective: 1000px; /* Cho hiệu ứng 3D */
+        }
+
+        /* --- Quân bài --- */
+        .card-hand {
+            display: flex;
+            justify-content: center;
+            flex-wrap: nowrap; /* Không xuống dòng */
+            /* Sử dụng transform-style để cho phép các lá bài con có hiệu ứng 3D */
+            transform-style: preserve-3d; 
+            margin-top: 20px;
+        }
+
+        .card {
+            width: 60px; /* Chiều rộng quân bài */
+            height: 90px; /* Chiều cao quân bài */
+            background-color: white;
+            border: 1px solid #333;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+            box-sizing: border-box;
+            font-size: 1.1em;
+            font-weight: bold;
+            position: relative;
+            margin: 0 -15px; /* Tạo hiệu ứng chồng lên nhau */
+            transform-origin: bottom center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, margin 0.2s ease;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3); /* Bóng đổ cho cảm giác nổi */
+            
+            /* Hiệu ứng cong nhẹ */
+            transform: rotateX(15deg) rotateY(0deg) rotateZ(0deg); 
+        }
+
+        /* Màu cho các chất bài */
+        .card.C, .card.R { color: red; } /* Cơ, Rô */
+        .card.T, .card.B { color: black; } /* Tép, Bích */
+
+        /* Hiệu ứng khi hover */
+        .card:hover {
+            transform: translateY(-10px) rotateX(10deg); /* Nổi lên và bớt cong */
+            box-shadow: 4px 4px 10px rgba(0,0,0,0.5);
+            z-index: 10; /* Đưa lên trên khi hover */
+        }
+
+        /* Hiệu ứng khi được chọn */
+        .card.selected {
+            transform: translateY(-25px) rotateX(5deg); /* Nổi lên cao hơn khi chọn */
+            border-color: #48bb78; /* Viền xanh */
+            box-shadow: 0 0 15px #48bb78; /* Phát sáng xanh */
+            z-index: 15;
+        }
+
+        /* Các quân bài đã đánh */
+        #played-cards .card {
+            cursor: default;
+            margin: 0 2px;
+            transform: none; /* Không cong khi đã đánh */
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+            opacity: 0.8;
+            pointer-events: none; /* Không thể tương tác */
+        }
+        #played-cards .card:hover {
+            transform: none;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+        }
+
+        /* Các thẻ con Rank và Suit */
+        .card .rank-top, .card .rank-bottom { font-size: 0.8em; }
+        .card .suit-center { font-size: 1.5em; line-height: 1; }
     </style>
 </head>
 <body>
-    <h1>Web Game Bài (Sâm, Tiến Lên, Liêng, 3 Cây)</h1>
-
-    <div class="game-buttons">
-        <button onclick="joinQueue('sam')">Chơi Nhanh Sâm</button>
-        <button onclick="joinQueue('tienlen')">Chơi Nhanh Tiến Lên</button>
-        <button onclick="joinQueue('lieng')">Chơi Nhanh Liêng</button>
-        <button onclick="joinQueue('bacay')">Chơi Nhanh 3 Cây</button>
-    </div>
-    
-    <p id="status-message">Chọn game để bắt đầu.</p>
-
-    <div id="game-area">
-        <h2>Bài đã đánh:</h2>
-        <div id="played-cards" class="card-hand"></div>
+    <div class="container">
+        <h1>Web Game Bài (Sâm, Tiến Lên, Liêng, 3 Cây)</h1>
         
-        <h2>Bài trên tay:</h2>
-        <div id="player-hand" class="card-hand"></div>
+        <p id="user-info">ID của bạn: <span id="my-user-id">Đang tải...</span></p>
+        <p id="status-message">Chọn game để bắt đầu.</p>
+
+        <div class="game-buttons">
+            <button onclick="joinQueue('sam')">Chơi Nhanh Sâm</button>
+            <button onclick="joinQueue('tienlen')">Chơi Nhanh Tiến Lên</button>
+            <button onclick="joinQueue('lieng')">Chơi Nhanh Liêng</button>
+            <button onclick="joinQueue('bacay')">Chơi Nhanh 3 Cây</button>
+            <button onclick="createPrivateRoom('sam')">Tạo Phòng Sâm Riêng</button>
+            <input type="text" id="private-room-code-input" placeholder="Mã phòng solo">
+            <button onclick="joinPrivateRoom()">Vào Phòng Riêng</button>
+        </div>
         
-        <div id="action-buttons"></div>
+        <div id="game-area">
+            <div id="played-cards-area">
+                <h2>Bài đã đánh:</h2>
+                <div id="played-cards" class="card-hand"></div>
+            </div>
+            
+            <div id="player-hand-area">
+                <h2>Bài trên tay:</h2>
+                <div id="player-hand" class="card-hand"></div>
+                <div id="action-buttons">
+                    <button onclick="playSelectedCards()">Đánh</button>
+                    <button class="red" onclick="passTurn()">Bỏ Lượt</button>
+                    <button onclick="baoSam()">Báo Sâm</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        const myUserIdSpan = document.getElementById('my-user-id');
         const statusMessage = document.getElementById('status-message');
-        const playerHand = document.getElementById('player-hand');
+        const playerHandDiv = document.getElementById('player-hand');
+        const playedCardsDiv = document.getElementById('played-cards');
+        const privateRoomCodeInput = document.getElementById('private-room-code-input');
+        
+        let selectedCards = []; // Mảng chứa các lá bài đang được chọn
+        let currentPlayerHand = []; // Lưu trữ bài trên tay hiện tại của người chơi
 
-        // Hàm tham gia Queue
+        // --- Hàm Utility: Map card object to HTML card element ---
+        function createCardElement(card) {
+            const cardEl = document.createElement('div');
+            cardEl.className = `card ${card.suit}`; // Thêm class cho chất để CSS đổi màu
+            cardEl.dataset.rank = card.rank;
+            cardEl.dataset.suit = card.suit;
+            cardEl.dataset.value = card.value;
+            cardEl.dataset.suitValue = card.suit_value;
+            cardEl.innerHTML = `
+                <div class="rank-top">${card.rank}</div>
+                <div class="suit-center">${card.suit === 'C' ? '♥' : card.suit === 'R' ? '♦' : card.suit === 'T' ? '♣' : '♠'}</div>
+                <div class="rank-bottom">${card.rank}</div>
+            `;
+            cardEl.onclick = () => toggleCardSelection(card, cardEl);
+            return cardEl;
+        }
+
+        // --- CLIENT-SIDE LOGIC ---
+
+        // Toggle chọn bài
+        function toggleCardSelection(card, cardEl) {
+            const index = selectedCards.findIndex(c => c.rank === card.rank && c.suit === card.suit);
+            if (index > -1) {
+                selectedCards.splice(index, 1);
+                cardEl.classList.remove('selected');
+            } else {
+                selectedCards.push(card);
+                cardEl.classList.add('selected');
+            }
+            console.log('Selected Cards:', selectedCards);
+        }
+
+        // --- Gửi hành động lên Server ---
+
         function joinQueue(gameType) {
             statusMessage.textContent = `Đang tìm trận ${gameType}...`;
             socket.emit('join_queue', gameType);
         }
 
-        // Nhận thông báo từ Server
+        function createPrivateRoom(gameType) {
+            socket.emit('create_private_room', gameType);
+        }
+
+        function joinPrivateRoom() {
+            const roomCode = privateRoomCodeInput.value.trim();
+            if (roomCode) {
+                socket.emit('join_private_room', roomCode);
+            } else {
+                alert('Vui lòng nhập mã phòng.');
+            }
+        }
+
+        function playSelectedCards() {
+            if (selectedCards.length === 0) {
+                alert('Vui lòng chọn ít nhất một lá bài để đánh.');
+                return;
+            }
+            const currentRoomId = socket.data.roomId; // Lấy roomId từ socket.data
+            if (currentRoomId) {
+                socket.emit('play_cards', { roomId: currentRoomId, cards: selectedCards });
+                selectedCards = []; // Reset selected cards
+            } else {
+                alert('Bạn chưa ở trong phòng nào.');
+            }
+        }
+
+        function passTurn() {
+            const currentRoomId = socket.data.roomId;
+            if (currentRoomId) {
+                socket.emit('pass', { roomId: currentRoomId });
+            } else {
+                alert('Bạn chưa ở trong phòng nào.');
+            }
+        }
+
+        function baoSam() {
+            const currentRoomId = socket.data.roomId;
+            if (currentRoomId) {
+                socket.emit('bao_sam', { roomId: currentRoomId });
+            } else {
+                alert('Bạn chưa ở trong phòng nào.');
+            }
+        }
+
+
+        // --- SOCKET.IO EVENTS ---
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('my_user_id', (userId) => {
+            myUserIdSpan.textContent = userId;
+            socket.data.userId = userId; // Lưu userId vào socket client
+        });
+
         socket.on('queue_update', (message) => {
             statusMessage.textContent = message;
         });
 
-        // Nhận thông báo khi tìm thấy trận đấu
         socket.on('match_found', (data) => {
-            statusMessage.textContent = `Đã tìm thấy trận ${data.gameType}! Room ID: ${data.roomId}`;
+            statusMessage.textContent = `Đã tìm thấy trận ${data.gameType}! Room ID: ${data.roomId}. Người chơi: ${data.players.join(', ')}`;
+            socket.data.roomId = data.roomId; // Lưu roomId vào socket client
         });
 
-        // Nhận cập nhật trạng thái game và render giao diện
+        socket.on('private_room_created', (data) => {
+            statusMessage.textContent = `Phòng riêng của bạn đã tạo! Mã phòng: ${data.roomCode}. Mời bạn bè tham gia!`;
+            privateRoomCodeInput.value = data.roomCode;
+            socket.data.roomId = data.roomId;
+        });
+
+        socket.on('player_joined', (userId) => {
+            statusMessage.textContent += ` Người chơi ${userId} đã tham gia.`;
+        });
+
         socket.on('game_state_update', (state) => {
             console.log('Trạng thái game mới:', state);
             
-            // Lọc bài của người chơi hiện tại
-            const myCards = state.cards[socket.id] || [];
+            // Cập nhật bài trên tay
+            currentPlayerHand = state.cards[socket.data.userId] || [];
+            playerHandDiv.innerHTML = ''; // Xóa bài cũ
+            selectedCards = []; // Reset chọn bài
+            currentPlayerHand.forEach(card => {
+                playerHandDiv.appendChild(createCardElement(card));
+            });
             
-            // Render Bài trên tay
-            playerHand.innerHTML = myCards.map(card => 
-                `<div class="card card-${card.suit}" data-rank="${card.rank}" data-suit="${card.suit}">${card.rank}${card.suit}</div>`
-            ).join('');
-            
-            // Render Bài đã đánh (Ví dụ đơn giản)
-            const playedCards = state.lastPlayed || [];
-            document.getElementById('played-cards').innerHTML = playedCards.map(card => 
-                 `<div class="card played-card card-${card.suit}">${card.rank}${card.suit}</div>`
-            ).join('');
+            // Cập nhật bài đã đánh
+            playedCardsDiv.innerHTML = '';
+            if (state.lastPlayed && state.lastPlayed.length > 0) {
+                state.lastPlayed.forEach(card => {
+                    playedCardsDiv.appendChild(createCardElement(card));
+                });
+            }
 
-            // Hiển thị ai là người chơi hiện tại
-            if (state.currentPlayer === socket.id) {
+            // Cập nhật trạng thái lượt chơi
+            if (state.currentPlayer === socket.data.userId) {
                 statusMessage.textContent = "ĐẾN LƯỢT BẠN ĐI!";
             } else {
                  statusMessage.textContent = `Đang chờ người chơi: ${state.currentPlayer}`;
             }
 
+            // Cập nhật thông báo Báo Sâm
+            if (state.samCalled) {
+                statusMessage.textContent += ` (${state.samCalled} ĐÃ BÁO SÂM)`;
+            }
         });
         
-        // Xử lý lỗi
         socket.on('error', (message) => {
             alert('Lỗi: ' + message);
         });
 
+        socket.on('chat_message', (message) => {
+            statusMessage.textContent = message; // Tạm thời dùng status message
+        });
+
     </script>
 </body>
-</html>
+                </html>
+    
