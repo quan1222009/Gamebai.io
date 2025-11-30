@@ -4,34 +4,37 @@
     <meta charset="UTF-8">
     <title>Web Game Bài .io</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        .game-buttons button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
-        #game-area { border: 1px solid #ccc; padding: 20px; min-height: 300px; margin: 20px auto; width: 80%; }
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #36454F; color: white; }
+        .game-buttons button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; }
+        #game-area { border: 1px solid #777; padding: 20px; min-height: 300px; margin: 20px auto; width: 80%; background-color: #2F4F4F; border-radius: 10px; }
         .card-hand { display: flex; justify-content: center; margin-top: 20px; }
-        .card { border: 1px solid #000; padding: 10px; margin: 5px; background-color: white; border-radius: 5px; }
+        .card { border: 2px solid #000; padding: 10px; margin: 5px; background-color: white; color: black; border-radius: 5px; font-weight: bold; width: 40px; height: 60px; display: flex; justify-content: center; align-items: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
-    <h1>Web Game Bài (Sâm, Tiến Lên,...)</h1>
+    <h1>Web Game Bài (Sâm, Tiến Lên, Liêng, 3 Cây)</h1>
 
     <div class="game-buttons">
         <button onclick="joinQueue('sam')">Chơi Nhanh Sâm</button>
         <button onclick="joinQueue('tienlen')">Chơi Nhanh Tiến Lên</button>
-        </div>
+        <button onclick="joinQueue('lieng')">Chơi Nhanh Liêng</button>
+        <button onclick="joinQueue('bacay')">Chơi Nhanh 3 Cây</button>
+    </div>
     
     <p id="status-message">Chọn game để bắt đầu.</p>
 
     <div id="game-area">
+        <h2>Bài đã đánh:</h2>
+        <div id="played-cards" class="card-hand"></div>
+        
         <h2>Bài trên tay:</h2>
         <div id="player-hand" class="card-hand"></div>
         
-        <h2>Khu vực đánh:</h2>
-        <div id="played-cards" class="card-hand"></div>
+        <div id="action-buttons"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // Kết nối đến Server
         const socket = io();
         const statusMessage = document.getElementById('status-message');
         const playerHand = document.getElementById('player-hand');
@@ -49,22 +52,34 @@
 
         // Nhận thông báo khi tìm thấy trận đấu
         socket.on('match_found', (data) => {
-            statusMessage.textContent = `Đã tìm thấy trận! Room ID: ${data.roomId}`;
+            statusMessage.textContent = `Đã tìm thấy trận ${data.gameType}! Room ID: ${data.roomId}`;
         });
 
-        // Nhận cập nhật trạng thái game
+        // Nhận cập nhật trạng thái game và render giao diện
         socket.on('game_state_update', (state) => {
             console.log('Trạng thái game mới:', state);
-            // --- LOGIC HIỂN THỊ BÀI Ở ĐÂY ---
-            // Dựa vào 'state.cards[socket.id]' để hiển thị bài của người chơi
-            // Dựa vào 'state.lastPlayed' để hiển thị bài đã đánh
             
-            // Ví dụ đơn giản:
-            if (state.cards && state.cards[socket.id]) {
-                playerHand.innerHTML = state.cards[socket.id].map(card => 
-                    `<div class="card">${card.rank}${card.suit}</div>`
-                ).join('');
+            // Lọc bài của người chơi hiện tại
+            const myCards = state.cards[socket.id] || [];
+            
+            // Render Bài trên tay
+            playerHand.innerHTML = myCards.map(card => 
+                `<div class="card card-${card.suit}" data-rank="${card.rank}" data-suit="${card.suit}">${card.rank}${card.suit}</div>`
+            ).join('');
+            
+            // Render Bài đã đánh (Ví dụ đơn giản)
+            const playedCards = state.lastPlayed || [];
+            document.getElementById('played-cards').innerHTML = playedCards.map(card => 
+                 `<div class="card played-card card-${card.suit}">${card.rank}${card.suit}</div>`
+            ).join('');
+
+            // Hiển thị ai là người chơi hiện tại
+            if (state.currentPlayer === socket.id) {
+                statusMessage.textContent = "ĐẾN LƯỢT BẠN ĐI!";
+            } else {
+                 statusMessage.textContent = `Đang chờ người chơi: ${state.currentPlayer}`;
             }
+
         });
         
         // Xử lý lỗi
