@@ -1,1 +1,77 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Web Game Bài .io</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        .game-buttons button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+        #game-area { border: 1px solid #ccc; padding: 20px; min-height: 300px; margin: 20px auto; width: 80%; }
+        .card-hand { display: flex; justify-content: center; margin-top: 20px; }
+        .card { border: 1px solid #000; padding: 10px; margin: 5px; background-color: white; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Web Game Bài (Sâm, Tiến Lên,...)</h1>
 
+    <div class="game-buttons">
+        <button onclick="joinQueue('sam')">Chơi Nhanh Sâm</button>
+        <button onclick="joinQueue('tienlen')">Chơi Nhanh Tiến Lên</button>
+        </div>
+    
+    <p id="status-message">Chọn game để bắt đầu.</p>
+
+    <div id="game-area">
+        <h2>Bài trên tay:</h2>
+        <div id="player-hand" class="card-hand"></div>
+        
+        <h2>Khu vực đánh:</h2>
+        <div id="played-cards" class="card-hand"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Kết nối đến Server
+        const socket = io();
+        const statusMessage = document.getElementById('status-message');
+        const playerHand = document.getElementById('player-hand');
+
+        // Hàm tham gia Queue
+        function joinQueue(gameType) {
+            statusMessage.textContent = `Đang tìm trận ${gameType}...`;
+            socket.emit('join_queue', gameType);
+        }
+
+        // Nhận thông báo từ Server
+        socket.on('queue_update', (message) => {
+            statusMessage.textContent = message;
+        });
+
+        // Nhận thông báo khi tìm thấy trận đấu
+        socket.on('match_found', (data) => {
+            statusMessage.textContent = `Đã tìm thấy trận! Room ID: ${data.roomId}`;
+        });
+
+        // Nhận cập nhật trạng thái game
+        socket.on('game_state_update', (state) => {
+            console.log('Trạng thái game mới:', state);
+            // --- LOGIC HIỂN THỊ BÀI Ở ĐÂY ---
+            // Dựa vào 'state.cards[socket.id]' để hiển thị bài của người chơi
+            // Dựa vào 'state.lastPlayed' để hiển thị bài đã đánh
+            
+            // Ví dụ đơn giản:
+            if (state.cards && state.cards[socket.id]) {
+                playerHand.innerHTML = state.cards[socket.id].map(card => 
+                    `<div class="card">${card.rank}${card.suit}</div>`
+                ).join('');
+            }
+        });
+        
+        // Xử lý lỗi
+        socket.on('error', (message) => {
+            alert('Lỗi: ' + message);
+        });
+
+    </script>
+</body>
+</html>
