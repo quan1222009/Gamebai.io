@@ -1,179 +1,64 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Game Bài Đa Chế Độ</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        /* CSS GIỮ NGUYÊN PHẦN CƠ BẢN VÀ FULL SCREEN LAYOUT */
-        body, html { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a202c; color: #e2e8f0; margin: 0; padding: 0; overflow: hidden; }
-        .full-screen-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #login-screen, #mode-selection-screen, #game-screen { display: none; width: 100%; height: 100%; }
-        .screen-content { background-color: #2d3748; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); text-align: center; max-width: 800px; }
-        
-        /* CÁC NÚT ĐIỀU KHIỂN & INPUT */
-        .mode-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-bottom: 20px; }
-        .mode-group button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 8px; cursor: pointer; transition: transform 0.2s; min-width: 220px; }
-        .btn-game { background-color: #48bb78; color: white; }
-        .btn-game:hover { background-color: #38a169; transform: scale(1.05); }
-        .btn-action { background-color: #4299e1; color: white; }
-        .btn-action:hover { background-color: #3182ce; }
-        .btn-solo { background-color: #ed8936; color: white; }
-        
-        /* GAME SCREEN LAYOUT */
-        #game-area { position: relative; width: 100%; height: 100%; background-color: #3b8273; }
-        /* ... (CSS cho player-seat, card, action-buttons giữ nguyên) ... */
-    </style>
+  <meta charset="UTF-8">
+  <title>Card Game</title>
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div class="full-screen-container">
+<h1>Card Game Prototype</h1>
 
-        <div id="login-screen" class="full-screen-container">
-            <div class="screen-content">
-                <h2>CHÀO MỪNG ĐẾN GAME BÀI ONLINE</h2>
-                <input type="text" id="username-input" placeholder="Nhập tên đăng nhập" style="width: 80%; padding: 12px; margin-bottom: 15px; border-radius: 6px;">
-                <button class="btn-game" onclick="handleLogin()" style="width: 80%; padding: 12px;">ĐĂNG NHẬP / TẠO TÀI KHOẢN</button>
-                <p id="my-user-id" style="font-weight: bold; color: #63b3ed; margin-top: 20px;"></p>
-            </div>
-        </div>
+<div>
+  <h3>Auth</h3>
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+</div>
 
-        <div id="mode-selection-screen" class="full-screen-container">
-            <div class="screen-content">
-                <h2>CHỌN CHẾ ĐỘ CHƠI VÀ HÀNH ĐỘNG</h2>
+<div>
+  <h3>Room</h3>
+  <button onclick="createRoom()">Create Room</button>
+  <input id="joinRoomID" placeholder="Room ID">
+  <button onclick="joinRoom()">Join Room</button>
+</div>
 
-                <h3>CHỌN GAME VÀ CHẾ ĐỘ CHƠI</h3>
-                <div class="mode-group">
-                    <button class="btn-game" onclick="selectGameMode('sam', 'queue')">GHÉP NHANH SÂM</button>
-                    <button class="btn-game" onclick="selectGameMode('tienlen', 'queue')">GHÉP NHANH TIẾN LÊN</button>
-                    <button class="btn-game" onclick="selectGameMode('lieng', 'queue')">GHÉP NHANH LIÊNG</button>
-                    <button class="btn-game" onclick="selectGameMode('bacay', 'queue')">GHÉP NHANH 3 CÂY</button>
-                    
-                    <button class="btn-action" onclick="selectGameMode('sam', 'bot')">CHƠI VỚI BOT SÂM</button>
-                    <button class="btn-action" onclick="selectGameMode('tienlen', 'bot')">CHƠI VỚI BOT TL</button>
-                    <button class="btn-action" onclick="selectGameMode('lieng', 'bot')">CHƠI VỚI BOT LIÊNG</button>
-                    <button class="btn-action" onclick="selectGameMode('bacay', 'bot')">CHƠI VỚI BOT 3 CÂY</button>
-                </div>
+<script>
+let socket;
 
-                <h3>PHÒNG RIÊNG VÀ BẠN BÈ</h3>
-                <div class="mode-group">
-                    <input type="text" id="solo-game-type-input" placeholder="Loại game (sam/tienlen)" value="sam" style="width: 120px;">
-                    <button class="btn-solo" onclick="createPrivateRoom(document.getElementById('solo-game-type-input').value)">TẠO PHÒNG SOLO</button>
-                    <input type="text" id="private-room-code-input" placeholder="Mã phòng Solo">
-                    <button class="btn-solo" onclick="joinPrivateRoom()">VÀO PHÒNG SOLO</button>
-                </div>
+async function register(){
+  const username=document.getElementById("username").value;
+  const password=document.getElementById("password").value;
+  const res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const data=await res.json();
+  alert(JSON.stringify(data));
+}
 
-                <div class="mode-group">
-                    <input type="text" id="friend-id-input" placeholder="ID (12 số) để kết bạn">
-                    <button class="btn-action" onclick="addFriendById()">KẾT BẠN</button>
-                </div>
+async function login(){
+  const username=document.getElementById("username").value;
+  const password=document.getElementById("password").value;
+  const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const data=await res.json();
+  alert(JSON.stringify(data));
+  if(data.token){
+    socket=io();
+  }
+}
 
-                <button class="btn-game" style="margin-top: 20px;" onclick="switchScreen('login')">Đăng Xuất</button>
-            </div>
-        </div>
-        
-        <div id="game-screen">
-            <div id="game-area">
-                <p id="status-message" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px;"></p>
-                
-                <div class="player-seat top" id="seat-top"><div class="player-info">TOP (Bot)</div></div>
-                <div class="player-seat left" id="seat-left"><div class="player-info">LEFT (Bot)</div></div>
-                <div class="player-seat right" id="seat-right"><div class="player-info">RIGHT (Bot)</div></div>
-                
-                <div id="played-cards-area">
-                    <div id="played-cards" class="card-hand"></div>
-                </div>
-                
-                <div id="action-buttons">
-                    <button id="btn-pass" class="btn-game-secondary" onclick="passTurn()">Bỏ Lượt</button>
-                    <button id="btn-play" class="btn-game-primary" onclick="playSelectedCards()">Đánh</button>
-                    <button id="btn-bao-sam" class="btn-game-primary" onclick="baoSam()">Báo Sâm</button>
-                    <button id="btn-huy-sam" class="btn-game-secondary" onclick="cancelSam()">Hủy Sâm</button>
-                </div>
+async function createRoom(){
+  const username=document.getElementById("username").value;
+  const res=await fetch('/api/room/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gameType:"sam",userID:username})});
+  const data=await res.json();
+  alert(JSON.stringify(data));
+}
 
-                <div id="player-hand-area" class="player-seat bottom">
-                    <div class="player-info" id="my-player-info">BÀI CỦA BẠN</div>
-                    <div id="player-hand" class="card-hand"></div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <script>
-        // --- KHAI BÁO BIẾN & SWITCH SCREEN (Giữ nguyên) ---
-        const socket = io();
-        const screens = {
-            login: document.getElementById('login-screen'),
-            mode: document.getElementById('mode-selection-screen'),
-            game: document.getElementById('game-screen')
-        };
-        const myUserIdSpan = document.getElementById('my-user-id');
-        // ... (Khai báo các biến DOM khác)
-        let selectedCards = []; 
-        let currentGameState = null;
-
-        switchScreen('login');
-        function switchScreen(target) { /* ... (Logic chuyển màn hình) ... */ }
-        function handleLogin() { /* ... (Logic đăng nhập) ... */ }
-
-        // --- HÀM CHỌN CHẾ ĐỘ MỚI ---
-        function selectGameMode(gameType, mode) {
-            if (mode === 'queue') {
-                joinQueue(gameType);
-            } else if (mode === 'bot') {
-                joinBotGame(gameType);
-            }
-        }
-
-        // --- HÀM GỬI LỆNH LÊN SERVER (Cập nhật gameType) ---
-        function joinBotGame(gameType) {
-            statusMessage.textContent = `Đang tạo phòng chơi với BOT (${gameType})...`;
-            socket.emit('join_bot_game', gameType);
-        }
-
-        function joinQueue(gameType) {
-            statusMessage.textContent = `Đang tìm trận ${gameType}. Vui lòng chờ...`;
-            socket.emit('join_queue', gameType);
-        }
-        
-        function createPrivateRoom(gameType) { 
-            if (['sam', 'tienlen', 'lieng', 'bacay'].includes(gameType)) {
-                 socket.emit('create_private_room', gameType); 
-            } else {
-                alert('Loại game không hợp lệ. Chọn sam, tienlen, lieng, hoặc bacay.');
-            }
-        }
-        
-        function playSelectedCards() { /* ... */ }
-        function passTurn() { /* ... */ }
-        function baoSam() { /* ... */ }
-        function addFriendById() { /* ... */ }
-        // ... (Các hàm khác: toggleCardSelection, createCardElement, etc.) ...
-        
-        // --- XỬ LÝ SỰ KIỆN SOCKET.IO (Cập nhật logic chuyển màn hình) ---
-        socket.on('my_user_id', (userId) => { 
-            socket.data.userId = userId; 
-            myUserIdSpan.textContent = `ID của bạn (12 số): ${userId}`;
-        });
-
-        socket.on('match_found', (data) => { 
-            socket.data.roomId = data.roomId;
-            statusMessage.textContent = `Đã tìm thấy trận ${data.gameType}! Bắt đầu chơi.`;
-            // Cập nhật tên game
-            document.getElementById('my-player-info').textContent = `BÀI CỦA BẠN (Game: ${data.gameType.toUpperCase()})`;
-            switchScreen('game'); 
-        });
-        
-        socket.on('game_state_update', (state) => {
-             // ... (Logic cập nhật bài trên tay, bài đã đánh, lượt chơi) ...
-            
-             // Cập nhật tên game
-             document.getElementById('my-player-info').textContent = `BÀI CỦA BẠN (Game: ${state.type.toUpperCase()})`;
-        });
-        
-        socket.on('error', (message) => { alert('Lỗi: ' + message); });
-        
-    </script>
+async function joinRoom(){
+  const roomID=document.getElementById("joinRoomID").value;
+  const username=document.getElementById("username").value;
+  const res=await fetch('/api/room/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roomID,userID:username})});
+  const data=await res.json();
+  alert(JSON.stringify(data));
+}
+</script>
 </body>
 </html>
