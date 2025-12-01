@@ -1,7 +1,6 @@
 {
   "name": "card-game-app",
   "version": "1.0.0",
-  "description": "Offline + Online Card Game (Sâm, Tiến lên, Uno, Nói dối)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,7 +10,7 @@
     "express": "^4.18.2",
     "mongoose": "^7.5.0",
     "bcrypt": "^5.1.1",
-    "jsonwebtoken": "^9.1.1",
+    "jsonwebtoken": "^9.0.2",
     "cors": "^2.8.5",
     "socket.io": "^4.7.2"
   },
